@@ -1,11 +1,11 @@
 import time
-import app.config as config
+# import app.config as config
 import requests as req
 import loguru
 import fake_useragent
 
-loguru.logger.remove()
-loguru.logger.add(config.log_picture_name, level="ERROR")
+# loguru.logger.remove()
+# loguru.logger.add(config.log_picture_name, level="ERROR")
 
 
 class Picture:

@@ -94,6 +94,8 @@ class Parser:
                 if x != -1:
                     json = raw_data[:x]
                     return json
+        else:
+            ...
 
     @staticmethod
     def page_scroller(driver: webdriver.Chrome):
@@ -146,7 +148,9 @@ class ParserZara(Parser):
                 product_list, lost_product_href = self.get_data_products(product_hrefs)
                 # print(product_list)
                 # print(lost_product_href)
+                print("Продуктов:")
                 print(len(product_list))
+                print("Потеряно")
                 print(len(lost_product_href))
 
                 # product_list, lost_product_href = self.get_data_products(lost_product_href)
@@ -155,10 +159,12 @@ class ParserZara(Parser):
                 # print(len(product_list))
                 # print(len(lost_product_href))
                 # break
+                time.sleep(120)
         else:
             ...
+        print("Конец")
 
-    def get_top_bar_hrefs(self) -> list[str] | None:
+    def get_top_bar_hrefs(self) -> list[str] or None:
         check = 0
         while check != 5:
             try:
@@ -194,7 +200,7 @@ class ParserZara(Parser):
             print("Драйвер не нашёл элемент.")
             return None
 
-    def get_data_products(self, href_list) -> (list, list):
+    def get_data_products(self, href_list) -> (list, list) or (None, None):
         if href_list:
             with mp.Manager() as m:
                 product_list = m.list()
@@ -211,10 +217,11 @@ class ParserZara(Parser):
         else:
             print("Список ссылок пуст")
             loguru.logger.error("href_list пуст")
-            return None
+            return None, None
 
     @staticmethod
     def get_data_product_process(url: str, user_agent: str, find_json, product_list: list, lost_href_list) -> None:
+        time.sleep(random.randint(1, 10))
         try:
             response = req.get(url, headers={"user-agent": user_agent}, timeout=10)
             if response:
