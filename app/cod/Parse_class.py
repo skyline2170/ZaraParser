@@ -11,9 +11,10 @@ import requests as req
 import loguru
 from selenium.webdriver.common.by import By
 from tqdm import tqdm
-
 import json_main_page_validator
 import json_validator
+import openpyxl
+import csv
 
 loguru.logger.add("log_parser_info.log", level="ERROR", encoding="utf-8")
 loguru.logger.add("log_parser.log", level="INFO", encoding="utf-8")
@@ -95,7 +96,14 @@ class Parser:
                     json = raw_data[:x]
                     return json
         else:
-            ...
+            return None
+
+    def struct_create(self):
+        if not os.path.exists("../data"):
+            os.mkdir("../data")
+        dir_name = datetime.datetime.now().strftime("%d.%m.%y_%H-%M-%S")
+        os.mkdir(f"../data/{dir_name}")
+        return dir_name
 
     @staticmethod
     def page_scroller(driver: webdriver.Chrome):
@@ -124,45 +132,102 @@ class ParserZara(Parser):
         self.user_agent = CreateUserAgent()
         # self.lost_product = []
 
-    def struct_create(self):
-        if not os.path.exists("../data"):
-            os.mkdir("../data")
-        dir_name = datetime.datetime.now().strftime("%d.%m.%y_%H-%M-%S")
-        os.mkdir(f"../data/{dir_name}")
-        return dir_name
-
-    def run(self):
+    def run(self, headless=HeadlessStatus.headless_on):
         dir_name = self.struct_create()
-        driver = self.create_driver(self.driver_path)
         top_bar_hrefs = self.get_top_bar_hrefs()
-        # print(top_bar_hrefs)
-        # exit(10)
+        driver = self.create_driver(self.driver_path, headless=headless)
         if top_bar_hrefs:
             for category_href in tqdm(top_bar_hrefs):
-                os.mkdir(f"../data/{dir_name}/{category_href[0]}")
-                driver.get(category_href[1])
-                time.sleep(10)
-                self.page_scroller(driver)
-                time.sleep(2)
-                product_hrefs = self.find_href_in_category(driver)
-                product_list, lost_product_href = self.get_data_products(product_hrefs)
-                # print(product_list)
-                # print(lost_product_href)
-                print("Продуктов:")
-                print(len(product_list))
-                print("Потеряно")
-                print(len(lost_product_href))
-
-                # product_list, lost_product_href = self.get_data_products(lost_product_href)
-                # print(product_list)
-                # print(lost_product_href)
-                # print(len(product_list))
-                # print(len(lost_product_href))
-                # break
-                time.sleep(120)
+                self.pars_category_page(category_href, dir_name, driver)
         else:
             ...
         print("Конец")
+
+    def run_2(self, headless=HeadlessStatus.headless_on, process_check=None, pipe_send=None,
+              pipe_recv=None):
+        dir_name = self.struct_create()
+        top_bar_hrefs = self.get_top_bar_hrefs()
+        driver = self.create_driver(self.driver_path, headless=headless)
+        if top_bar_hrefs:
+            if process_check:
+                pipe_send.send(top_bar_hrefs)
+                print("data_send")
+                print("recv")
+                print(pipe_recv.recv())
+            else:
+                print("запуск run_2 без процессов")
+                for category_href in tqdm(top_bar_hrefs):
+                    os.mkdir(f"../data/{dir_name}/{category_href[0]}")
+                    print(category_href[0])
+                    product_list, lost_list = self.pars_category_page(category_href, driver)
+                    # print(product_list)
+
+                    x = self.f1(product_list)
+                    self.create_excel(x, f"../data/{dir_name}/{category_href[0]}/{category_href[0]}")
+
+                    time.sleep(120)
+
+        else:
+            ...
+        print("Конец")
+
+    @staticmethod
+    def f1(product_list: list[json_validator.Product]):
+        data_list = []
+        for product in product_list:
+            data_list.append(
+                (product.name, product.description, product.price, product.brand, product.color_1,
+                 product.color_hexCode,
+                 str([j["size"] for j in product.size if j["availability"].lower() == "coming_soon"]),
+                 str([j["size"] for j in product.size if j["availability"].lower() == "in_stock"]),
+                 str([j["size"] for j in product.size if j["availability"].lower() == "out_of_stock"])
+                 ))
+
+
+            data_list[-1][1].replace("\n", "")
+            data_list[-1][1].replace("\n\n", "")
+        return data_list[:]
+
+    @staticmethod
+    def create_excel(list_data, path):
+        with open(f"{path}.csv", "w", encoding="utf-8") as file:
+            data_list = [("Name", "Description", "Price", "Brand", "Color", "Color hex cod", "Size comin soon",
+                          "Size in stock", "Size out_of_stock")]
+            data_list.extend(list_data)
+            writer = csv.writer(file)
+            writer.writerows(data_list)
+
+    def pars_category_page(self, category_href: list, driver: webdriver.Chrome):
+        print("gg")
+        driver.get(category_href[1])
+        self.page_scroller(driver)
+        time.sleep(2)
+        product_hrefs = self.find_href_in_category(driver)
+        if product_hrefs:
+            try_check = 0
+            result_product_list = []
+            result_lost_list = []
+            while True:
+                product_list, lost_product_href = self.get_data_products(product_hrefs)
+                try_check += 1
+                if len(lost_product_href) == 0 or try_check == 3:
+                    result_product_list.extend(product_list[:])
+                    result_lost_list.extend(lost_product_href[:])
+                    break
+                else:
+                    print(f"Временные потери: {len(lost_product_href)}")
+                    result_product_list.extend(product_list[:])
+                    product_hrefs = lost_product_href[:]
+                    result_lost_list.extend(lost_product_href[:])
+                    lost_product_href.clear()
+            print("Товары:")
+            print(len(result_product_list))
+            print("Потеряно:")
+            print(len(lost_product_href))
+            return result_product_list[:], result_lost_list[:]
+        else:
+            print("Продукты не найдены на странице")
+            return None, None
 
     def get_top_bar_hrefs(self) -> list[str] or None:
         check = 0
@@ -190,14 +255,16 @@ class ParserZara(Parser):
     def find_href_in_category(driver: webdriver.Chrome) -> list | None:
         try:
             product_group = driver.find_element(By.CLASS_NAME, "product-groups")
-            hrefs = product_group.find_elements(By.CLASS_NAME, "product-grid-product-info")
-            hrefs = [i.find_element(By.TAG_NAME, "a").get_attribute("href") for i in hrefs]
-            # print(hrefs)
+
+            # hrefs = product_group.find_elements(By.CLASS_NAME, "product-grid-product-info__product-header")
+            # hrefs = [i.find_element(By.TAG_NAME, "a").get_attribute("href") for i in hrefs]
+            hrefs = [i.get_attribute("href") for i in product_group.find_elements(By.TAG_NAME, "a")]
+            print(hrefs)
             return hrefs
 
         except selenium.common.exceptions.NoSuchElementException:
             loguru.logger.error("Драйвер не нашёл элемент.")
-            print("Драйвер не нашёл элемент.")
+            print(f"Драйвер не нашёл элемент на {driver.current_url}")
             return None
 
     def get_data_products(self, href_list) -> (list, list) or (None, None):
@@ -249,7 +316,7 @@ class ParserZara(Parser):
 
 if __name__ == '__main__':
     x = ParserZara()
-    x.run()
+    x.run_2(headless=HeadlessStatus.headless_off)
     # driver = x.create_driver("../../chromedriver.exe")
     # driver.get(
     #     "https://www.zara.com/tr/tr/kadin-ayakkabilar-gece-l1278.html?v1=2175486")
