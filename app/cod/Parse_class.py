@@ -13,8 +13,8 @@ from selenium.webdriver.common.by import By
 from tqdm import tqdm
 import json_main_page_validator
 import json_validator
-import openpyxl
 import csv
+import Picture_class
 
 loguru.logger.add("log_parser_info.log", level="ERROR", encoding="utf-8")
 loguru.logger.add("log_parser.log", level="INFO", encoding="utf-8")
@@ -138,7 +138,7 @@ class ParserZara(Parser):
         driver = self.create_driver(self.driver_path, headless=headless)
         if top_bar_hrefs:
             for category_href in tqdm(top_bar_hrefs):
-                self.pars_category_page(category_href, dir_name, driver)
+                self.pars_category_page(category_href, driver)
         else:
             ...
         print("Конец")
@@ -161,14 +161,31 @@ class ParserZara(Parser):
                     print(category_href[0])
                     product_list, lost_list = self.pars_category_page(category_href, driver)
                     # print(product_list)
-
-                    x = self.f1(product_list)
-                    self.create_excel(x, f"../data/{dir_name}/{category_href[0]}/{category_href[0]}")
-
+                    print(len(product_list))
+                    if product_list:
+                        for product in product_list:
+                            print(product.name)
+                            date = datetime.datetime.now().strftime('%d.%m.%y_%H-%M-%S')
+                            if not os.path.exists(f"../data/{dir_name}/{category_href[0]}/img_{product.name}_{date}"):
+                                os.mkdir(f"../data/{dir_name}/{category_href[0]}/img_{product.name}_{date}")
+                            for i, img in enumerate(product.hrefs_imgs_list):
+                                picture = Picture_class.Picture(img)
+                                if picture.load_picture():
+                                    picture.save_picture(
+                                        f"../data/{dir_name}/{category_href[0]}/img_{product.name}_{date}/{i}.jpg")
+                                else:
+                                    print("картинка не скачана")
+                        x = self.f1(product_list)
+                        self.create_excel(x, f"../data/{dir_name}/{category_href[0]}/{category_href[0]}")
+                        with open(f"../data/{dir_name}/{category_href[0]}/lost_href.txt", "w") as file:
+                            file.writelines([i + "\n" for i in lost_list])
+                    ##
+                    # break
+                    ##
                     time.sleep(120)
 
         else:
-            ...
+            print("Не найдены ссылки в на катеегории")
         print("Конец")
 
     @staticmethod
@@ -182,7 +199,6 @@ class ParserZara(Parser):
                  str([j["size"] for j in product.size if j["availability"].lower() == "in_stock"]),
                  str([j["size"] for j in product.size if j["availability"].lower() == "out_of_stock"])
                  ))
-
 
             data_list[-1][1].replace("\n", "")
             data_list[-1][1].replace("\n\n", "")
@@ -218,7 +234,7 @@ class ParserZara(Parser):
                     print(f"Временные потери: {len(lost_product_href)}")
                     result_product_list.extend(product_list[:])
                     product_hrefs = lost_product_href[:]
-                    result_lost_list.extend(lost_product_href[:])
+                    result_lost_list.clear()
                     lost_product_href.clear()
             print("Товары:")
             print(len(result_product_list))
@@ -229,7 +245,7 @@ class ParserZara(Parser):
             print("Продукты не найдены на странице")
             return None, None
 
-    def get_top_bar_hrefs(self) -> list[str] or None:
+    def get_top_bar_hrefs(self) -> list[str] | None:
         check = 0
         while check != 5:
             try:
@@ -267,7 +283,7 @@ class ParserZara(Parser):
             print(f"Драйвер не нашёл элемент на {driver.current_url}")
             return None
 
-    def get_data_products(self, href_list) -> (list, list) or (None, None):
+    def get_data_products(self, href_list) -> (list, list) | (None, None):
         if href_list:
             with mp.Manager() as m:
                 product_list = m.list()

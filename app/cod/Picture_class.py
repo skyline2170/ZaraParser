@@ -4,6 +4,7 @@ import requests as req
 import loguru
 import fake_useragent
 
+
 # loguru.logger.remove()
 # loguru.logger.add(config.log_picture_name, level="ERROR")
 
@@ -35,4 +36,4 @@ if __name__ == '__main__':
     #     "https://static.zara.net/photos///2022/I/1/1/p/2107/010/040/2/w/333/2107010040_15_1_1.jpg?ts=1667384988296")
     # x.upload_picture()
     # x.save_picture("../1.jpg")
-    pass
+   pass
