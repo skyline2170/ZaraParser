@@ -13,8 +13,10 @@ from selenium.webdriver.common.by import By
 from tqdm import tqdm
 import json_main_page_validator
 import json_validator
+import openpyxl
 import csv
 import Picture_class
+import memory_profiler
 
 loguru.logger.add("log_parser_info.log", level="ERROR", encoding="utf-8")
 loguru.logger.add("log_parser.log", level="INFO", encoding="utf-8")
@@ -143,50 +145,61 @@ class ParserZara(Parser):
             ...
         print("Конец")
 
-    def run_2(self, headless=HeadlessStatus.headless_on, process_check=None, pipe_send=None,
+    # @memory_profiler.profile
+    def run_2(self, headless=HeadlessStatus.headless_on, pipe_send=None,
               pipe_recv=None):
+        progres = 0
         dir_name = self.struct_create()
+        progres += 5
+        pipe_send.send(5)
         top_bar_hrefs = self.get_top_bar_hrefs()
+        progres += 29
+        pipe_send.send(29)
         driver = self.create_driver(self.driver_path, headless=headless)
         if top_bar_hrefs:
-            if process_check:
-                pipe_send.send(top_bar_hrefs)
-                print("data_send")
-                print("recv")
-                print(pipe_recv.recv())
-            else:
-                print("запуск run_2 без процессов")
-                for category_href in tqdm(top_bar_hrefs):
-                    os.mkdir(f"../data/{dir_name}/{category_href[0]}")
-                    print(category_href[0])
-                    product_list, lost_list = self.pars_category_page(category_href, driver)
-                    # print(product_list)
-                    print(len(product_list))
-                    if product_list:
-                        for product in product_list:
-                            print(product.name)
-                            date = datetime.datetime.now().strftime('%d.%m.%y_%H-%M-%S')
-                            if not os.path.exists(f"../data/{dir_name}/{category_href[0]}/img_{product.name}_{date}"):
-                                os.mkdir(f"../data/{dir_name}/{category_href[0]}/img_{product.name}_{date}")
-                            for i, img in enumerate(product.hrefs_imgs_list):
-                                picture = Picture_class.Picture(img)
-                                if picture.load_picture():
-                                    picture.save_picture(
-                                        f"../data/{dir_name}/{category_href[0]}/img_{product.name}_{date}/{i}.jpg")
-                                else:
-                                    print("картинка не скачана")
-                        x = self.f1(product_list)
-                        self.create_excel(x, f"../data/{dir_name}/{category_href[0]}/{category_href[0]}")
-                        with open(f"../data/{dir_name}/{category_href[0]}/lost_href.txt", "w") as file:
-                            file.writelines([i + "\n" for i in lost_list])
-                    ##
-                    # break
-                    ##
-                    time.sleep(120)
+            for category_href in tqdm(top_bar_hrefs):
+                os.mkdir(f"../data/{dir_name}/{category_href[0]}")
+                print(category_href[0])
+                product_list, lost_list = self.pars_category_page(category_href, driver)
+                progres += int(66 / len(top_bar_hrefs) * 0.5)
+                pipe_send.send(int(66 / len(top_bar_hrefs) * 0.5))
+                if product_list:
+                    for product in product_list:
+                        # print(product.name)
+                        date = datetime.datetime.now().strftime('%d.%m.%y_%H-%M-%S')
+                        if not os.path.exists(f"../data/{dir_name}/{category_href[0]}/img_{product.name}_{date}"):
+                            os.mkdir(f"../data/{dir_name}/{category_href[0]}/img_{product.name}_{date}")
+                        for i, img in enumerate(product.hrefs_imgs_list):
+                            picture = Picture_class.Picture(img)
+                            # if picture.load_picture():
+                            progres += int(66 / len(top_bar_hrefs) * 0.25 / len(product_list))
+                            pipe_send.send(int(66 / len(top_bar_hrefs) * 0.25 / len(product_list)))
+                            #     picture.save_picture(
+                            #         f"../data/{dir_name}/{category_href[0]}/img_{product.name}_{date}/{i}.jpg")
+                            progres += int(66 / len(top_bar_hrefs) * 0.25 / len(product_list))
+                            pipe_send.send(int(66 / len(top_bar_hrefs) * 0.25 / len(product_list)))
+                            # else:
+                            #     print("картинка не скачана")
+                    print("Картинки скачаны")
+                    x = self.f1(product_list)
+                    self.create_excel(x, f"../data/{dir_name}/{category_href[0]}/{category_href[0]}")
+                    with open(f"../data/{dir_name}/{category_href[0]}/lost_href.txt", "w") as file:
+                        file.writelines([i + "\n" for i in lost_list])
+                    print("файлы записаны")
+                #
+                # break
+                #
+                # time.sleep(120)
 
         else:
             print("Не найдены ссылки в на катеегории")
         print("Конец")
+        # pipe_send.send(100)
+        pipe_send.send("end")
+        response = pipe_recv.recv()
+        progres += 100
+        print(f"{response=}")
+        print(f"{progres=}")
 
     @staticmethod
     def f1(product_list: list[json_validator.Product]):
@@ -226,7 +239,7 @@ class ParserZara(Parser):
             while True:
                 product_list, lost_product_href = self.get_data_products(product_hrefs)
                 try_check += 1
-                if len(lost_product_href) == 0 or try_check == 3:
+                if len(lost_product_href) == 0 or try_check == 2:
                     result_product_list.extend(product_list[:])
                     result_lost_list.extend(lost_product_href[:])
                     break
@@ -283,7 +296,7 @@ class ParserZara(Parser):
             print(f"Драйвер не нашёл элемент на {driver.current_url}")
             return None
 
-    def get_data_products(self, href_list) -> (list, list) | (None, None):
+    def get_data_products(self, href_list) -> (list, list) or (None, None):
         if href_list:
             with mp.Manager() as m:
                 product_list = m.list()
@@ -331,29 +344,26 @@ class ParserZara(Parser):
 
 
 if __name__ == '__main__':
+    import cProfile
+    import pstats
+    from pympler import tracker
+
+    import line_profiler
+
+    #
+    p = line_profiler.LineProfiler()
+
+    # profile = cProfile.Profile()
+    # profile.enable()
+    # q=tracker.SummaryTracker()
     x = ParserZara()
-    x.run_2(headless=HeadlessStatus.headless_off)
-    # driver = x.create_driver("../../chromedriver.exe")
-    # driver.get(
-    #     "https://www.zara.com/tr/tr/kadin-ayakkabilar-gece-l1278.html?v1=2175486")
-    #
-    # time.sleep(3)
-    #
-    # # l = x.get_data_product_process(
-    # #     "https://www.zara.com/tr/tr/parlak-detayli-topuklu-bilekte-bot-p12107010.html?v1=223692757&v2=2175486",
-    # #     x.user_agent, ParserZara.find_json, lost_list)
-    # # print(l)
-    # # print(lost_list)
-    #
-    # x.page_scroller(driver)
-    # href_list = x.find_href_in_category(driver)
-    # y, yy = x.get_data_products(href_list[:10])
-    # time.sleep(2)
-    # driver.quit()
-    # print(y)
-    # print(yy)
-    # x = Parser_Zara()
-    # list_href = x.get_top_bar_hrefs()
-    # print(list_href)
+    p_x = p(x.run_2)
+    p_x(headless=HeadlessStatus.headless_off)
+    p.print_stats()
+    # x.run_2(headless=HeadlessStatus.headless_off)
+    # q.print_diff()
+    # profile.disable()
+    # pstats.Stats(profile).strip_dirs().sort_stats("percall").print_stats()
+    # profile.print_stats()
 
     pass

@@ -1,10 +1,8 @@
-import time
 import tkinter as tk
 import tkinter.ttk as ttk
 import controler
 
-
-# from tkinter.ttk import Progressbar
+from tkinter.ttk import Progressbar
 
 
 def finish():
@@ -16,6 +14,7 @@ main_window = tk.Tk()
 main_window.title("Parser Zara")
 main_window.resizable(False, False)
 main_window.geometry("400x150+100+100")
+# main_window.geometry("400x100+100+100")
 main_window.protocol("WM_DELETE_WINDOW", finish)
 
 
@@ -30,9 +29,9 @@ def list_box_active(win: tk.Tk, list_box, radiobutton: tk.IntVar):
     win.update()
 
 
-def run(listbox, win, radiobutton):
-    controler.run(listbox, win, radiobutton)
-
+def run(listbox, win, radiobutton, progress_bar):
+    controler.run(listbox, win, radiobutton, progress_bar)
+    progress_bar.step(10)
 
 def main():
     # main_window.update()
@@ -45,22 +44,26 @@ def main():
 
     frame_radiobutton = tk.Frame(main_window)
 
-    radiobutton_1 = tk.Radiobutton(frame_radiobutton, text="Всё сразу", variable=r_var_1, value=0,
-                                   command=lambda: list_box_active(main_window, list_box, r_var_1))
-    radiobutton_2 = tk.Radiobutton(frame_radiobutton, text="На выбор", variable=r_var_1, value=1,
-                                   command=lambda: list_box_active(main_window, list_box, r_var_1))
+    # radiobutton_1 = tk.Radiobutton(frame_radiobutton, text="Всё сразу", variable=r_var_1, value=0,
+    #                                command=lambda: list_box_active(main_window, list_box, r_var_1))
+    # radiobutton_2 = tk.Radiobutton(frame_radiobutton, text="На выбор", variable=r_var_1, value=1,
+    #                                command=lambda: list_box_active(main_window, list_box, r_var_1))
 
     button_pars = tk.Button(main_window, text="Начать парсинг", background="orange", padx=2, pady=2,
-                            command=lambda: run(list_box, main_window, r_var_1))
-
+                            command=lambda: run(list_box, main_window, r_var_1, progress_bar))
+    int_progres = tk.IntVar()
+    int_progres.set(0)
+    progress_bar = ttk.Progressbar(main_window, length=250, maximum=101, mode="determinate", value=0,
+                                   variable=int_progres)
     list_box = tk.Listbox(main_window)
 
     label_url.pack(side=tk.TOP)
     #
     frame_radiobutton.pack(side=tk.TOP)
-    radiobutton_1.pack(side=tk.TOP)
-    radiobutton_2.pack(side=tk.TOP)
+    # radiobutton_1.pack(side=tk.TOP)
+    # radiobutton_2.pack(side=tk.TOP)
     button_pars.pack(side=tk.TOP, padx=10, pady=10)
+    progress_bar.pack(side=tk.TOP)
 
     #
     list_box.pack(side=tk.TOP)
